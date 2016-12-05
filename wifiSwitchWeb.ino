@@ -1,9 +1,6 @@
 
 /*
- * TimeNTP_ESP8266WiFi.ino
- * Example showing time sync to NTP time source
- *
- * This sketch uses the ESP8266WiFi library
+ * 
  */
 #include <EEPROM.h>
 #include <TimeLib.h>
