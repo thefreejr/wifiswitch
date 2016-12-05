@@ -8,7 +8,8 @@
 #include <WiFiUdp.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
+#include <WiFiManager.h> 
+#include <DNSServer.h>
 
 ESP8266WebServer server ( 80 );
 
@@ -16,8 +17,7 @@ ESP8266WebServer server ( 80 );
 //define section
 #define DEBUG //uncomment if you want  debug
 
-const char ssid[] = "Wive-NG-MT";  //  your network SSID (name)
-const char pass[] = "1234567891";       // your network password
+
 
 // NTP Servers:
 static const char ntpServerName[] = "us.pool.ntp.org";
@@ -26,12 +26,9 @@ static const char ntpServerName[] = "us.pool.ntp.org";
 //static const char ntpServerName[] = "time-b.timefreq.bldrdoc.gov";
 //static const char ntpServerName[] = "time-c.timefreq.bldrdoc.gov";
 
-//const int timeZone = 1;     // Central European Time
+
 const int timeZone = 5;     //ufa
-//const int timeZone = -5;  // Eastern Standard Time (USA)
-//const int timeZone = -4;  // Eastern Daylight Time (USA)
-//const int timeZone = -8;  // Pacific Standard Time (USA)
-//const int timeZone = -7;  // Pacific Daylight Time (USA)
+
 
 
 WiFiUDP Udp;
@@ -50,34 +47,24 @@ int hourOFF = 23;
 int minuteOFF = 00;
 
 
-const int led = 13; // for http
+
 int relayPin = 4;
 bool relayStatus;
-
+bool saveUptime = false;
 void setup()
 {
-  #ifdef DEBUG
+#ifdef DEBUG
   Serial.begin(9600);
   delay(250);
   Serial.println("TimeNTP Example");
   Serial.print("Connecting to ");
-  Serial.println(ssid);
   #endif
+  ///////////////////////////////////WIFI MANAGER/////////////////////
+   WiFiManager wifiManager;
+   wifiManager.autoConnect();
+   server.close();
  //////////////////////////////////WIFI////////////////////////////
-  WiFi.begin(ssid, pass);
-
-  while (WiFi.status() != WL_CONNECTED) 
-	{
-		delay(500);
-		#ifdef DEBUG
-		Serial.print(".");
-		#endif
-	}
-  #ifdef DEBUG
-  Serial.print("IP number assigned by DHCP is ");
-  Serial.println(WiFi.localIP());
-  Serial.println("Starting UDP");
-  #endif
+  
   Udp.begin(localPort);
   #ifdef DEBUG
   Serial.print("Local port: ");
@@ -85,12 +72,7 @@ void setup()
   Serial.println("waiting for sync");
   #endif
   ///////////////////////////////////WEB SREVER////////////////////////
-  if ( MDNS.begin ( "esp8266" ) ) 
-    {
-		#ifdef DEBUG
-		Serial.println ( "MDNS responder started" );
-		#endif
-	}
+ 
 	server.on ( "/", handleRoot );
 	//server.on ( "/test.svg", drawGraph );
 	server.on ( "/inline", []() 
@@ -106,12 +88,11 @@ void setup()
 	//////////////////////////////////TIME////////////////////////////
   setSyncProvider(getNtpTime);
   setSyncInterval(300);
-  pinMode(relayPin, OUTPUT); 
-  pinMode ( led, OUTPUT );
-  digitalWrite ( led, 0 );
+   
   
-  //////////////////////////////////save uptime///////////////////////
-  EEPROM_ulong_write(5,now());
+  
+  pinMode(relayPin, OUTPUT); 
+
   
   //////////////////////////////////eeprom////////////////////////
   EEPROM.begin(512);
@@ -122,6 +103,13 @@ void setup()
 
 void loop()
 {
+   //////////////////////////////////save uptime///////////////////////
+if ((now() > 1480896000) && !saveUptime) 
+{
+	EEPROM_ulong_write(5,now());
+	saveUptime = true;
+}
+  
   server.handleClient();
   if (timeStatus() != timeNotSet) 
   {
@@ -335,19 +323,19 @@ void sendNTPpacket(IPAddress &address)
 
 
 void handleRoot() {
-	digitalWrite ( led, 1 );
+	
 	char temp[800];
 	int sec = now() % 86400;
 	int min = sec / 60;
 	int hr = min / 60;
-	long uptime = (int)(now() - EEPROM_ulong_read(5))/3600;
+	unsigned long uptime = (int)(now() - EEPROM_ulong_read(5))/3600;
 	
 
 	snprintf ( temp, 800,
 
 "<html>\
   <head>\
-	<meta content='width=device-width, initial-scale=1' name='viewport'>\
+	<meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no' >\
     <title>ESP8266 Demo</title>\
     <style>\
       body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }\
@@ -370,11 +358,11 @@ void handleRoot() {
 		hr, min % 60, sec % 60, uptime, hourON, minuteON, hourOFF, minuteOFF, relayStatus
 	);
 	server.send ( 200, "text/html", temp );
-	digitalWrite ( led, 0 );
+	
 }
 
 void handleNotFound() {
-	digitalWrite ( led, 1 );
+	
 	String message = "File Not Found\n\n";
 	message += "URI: ";
 	message += server.uri();
@@ -389,24 +377,7 @@ void handleNotFound() {
 	}
 
 	server.send ( 404, "text/plain", message );
-	digitalWrite ( led, 0 );
+	
 }
 
 
-void drawGraph() {
-	String out = "";
-	char temp[100];
-	out += "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"400\" height=\"150\">\n";
- 	out += "<rect width=\"400\" height=\"150\" fill=\"rgb(250, 230, 210)\" stroke-width=\"1\" stroke=\"rgb(0, 0, 0)\" />\n";
- 	out += "<g stroke=\"black\">\n";
- 	int y = rand() % 130;
- 	for (int x = 10; x < 390; x+= 10) {
- 		int y2 = rand() % 130;
- 		sprintf(temp, "<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke-width=\"1\" />\n", x, 140 - y, x + 10, 140 - y2);
- 		out += temp;
- 		y = y2;
- 	}
-	out += "</g>\n</svg>\n";
-
-	server.send ( 200, "image/svg+xml", out);
-}
