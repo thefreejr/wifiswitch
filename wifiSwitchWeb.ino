@@ -113,6 +113,9 @@ void setup()
   pinMode ( led, OUTPUT );
   digitalWrite ( led, 0 );
   
+  //////////////////////////////////save uptime///////////////////////
+  EEPROM_ulong_write(5,now());
+  
   //////////////////////////////////eeprom////////////////////////
   EEPROM.begin(512);
   eepromRead();
@@ -185,6 +188,22 @@ void eepromWrite()
 	EEPROM.write(3, minuteOFF);
 	EEPROM.commit();
 }
+
+// чтение
+unsigned long EEPROM_ulong_read(int addr) {    
+  byte raw[4];
+  for(byte i = 0; i < 4; i++) raw[i] = EEPROM.read(addr+i);
+  unsigned long &num = (unsigned long&)raw;
+  return num;
+}
+
+// запись
+void EEPROM_ulong_write(int addr, unsigned long num) {
+  byte raw[4];
+  (unsigned long&)raw = num;
+  for(byte i = 0; i < 4; i++) EEPROM.write(addr+i, raw[i]);
+}
+
 
 bool relayStatusCheck()
 {
@@ -324,6 +343,8 @@ void handleRoot() {
 	int sec = now() % 86400;
 	int min = sec / 60;
 	int hr = min / 60;
+	long uptime = (int)(now() - EEPROM_ulong_read(5))/3600;
+	
 
 	snprintf ( temp, 800,
 
@@ -337,7 +358,7 @@ void handleRoot() {
   </head>\
   <body>\
     <h1>Hello from ESP8266!</h1>\
-    <p>Time: %02d:%02d:%02d</p>\
+    <p>Time: %02d:%02d:%02d // Uptime: %02d hours</p>\
 	<p>Relay ON = %02d:%02d</p>\
     <p>Relay OFF = %02d:%02d</p>\
 	<p>Relay Status = %02d</p>\
@@ -349,7 +370,7 @@ void handleRoot() {
   </body>\
 </html>",
 
-		hr, min % 60, sec % 60, hourON, minuteON, hourOFF, minuteOFF, relayStatus
+		hr, min % 60, sec % 60, uptime, hourON, minuteON, hourOFF, minuteOFF, relayStatus
 	);
 	server.send ( 200, "text/html", temp );
 	digitalWrite ( led, 0 );
